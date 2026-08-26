@@ -3,6 +3,7 @@
 from .atoms import ExoticAtom
 from .exotic_atom_yukawa import ExoticAtomYukawa
 from .measurements import Measurement
+from .models import YukawaCoupling
 from .transitions import Transition
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
     "ExoticAtomYukawa",
     "Measurement",
     "Transition",
+    "YukawaCoupling",
 ]
