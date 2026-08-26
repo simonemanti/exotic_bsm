@@ -19,7 +19,7 @@ class YukawaCoupling:
     """
 
     name: ClassVar[str] = "Yukawa coupling"
-    parameter_label: ClassVar[str] = r"$|g_o g_A|$"
+    parameter_label: ClassVar[str] = r"$|g_H^X g_N^X|$"
     parameter_unit: ClassVar[str] = ""
     parameter_power: ClassVar[int] = 1
 
