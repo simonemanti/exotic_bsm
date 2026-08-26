@@ -5,9 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from particle import Particle
 
-
-ALPHA = 1 / 137.035999177
-EV_PER_MEV = 1e6
+from .constants import ALPHA, EV_PER_MEV
 
 ORBITING_PARTICLE_ALIASES = {
     "kaon": "K-",

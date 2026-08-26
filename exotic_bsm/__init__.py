@@ -3,7 +3,7 @@
 from .atoms import ExoticAtom
 from .exotic_atom_yukawa import ExoticAtomYukawa
 from .measurements import Measurement
-from .models import YukawaCoupling
+from .models import HiggsMixing, YukawaCoupling
 from .plotting import plot_sensitivity
 from .sensitivities import SensitivityCurve, expected_sensitivity
 from .transitions import Transition
@@ -11,6 +11,7 @@ from .transitions import Transition
 __all__ = [
     "ExoticAtom",
     "ExoticAtomYukawa",
+    "HiggsMixing",
     "Measurement",
     "SensitivityCurve",
     "Transition",
