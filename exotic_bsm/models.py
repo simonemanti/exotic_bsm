@@ -9,6 +9,11 @@ from .constants import HIGGS_VEV_EV
 from .transitions import Transition
 
 
+def _validate_kaonic(transition: Transition) -> None:
+    if int(transition.atom.orbiting_particle.pdgid) != -321:
+        raise ValueError("model is defined for kaonic atoms")
+
+
 class YukawaCoupling:
     """Generic Yukawa interaction parameterized by ``g_o * g_A``.
 
@@ -61,7 +66,7 @@ class HiggsMixing:
 
     def kaon_coupling(self, transition: Transition, mediator_mass_ev):
         """Return the mass-dependent effective kaon coupling."""
-        self._validate_kaonic(transition)
+        _validate_kaonic(transition)
         mediator_mass = np.asarray(mediator_mass_ev, dtype=float)
         kaon_mass_ev = transition.atom.orbiting_mass_ev
         return (
@@ -80,7 +85,7 @@ class HiggsMixing:
         mediator_mass_ev,
     ):
         """Return ``K(m_X)`` in ``delta_E = K sin(vartheta)**2``."""
-        self._validate_kaonic(transition)
+        _validate_kaonic(transition)
         return (
             self.nuclear_coupling(transition)
             * self.kaon_coupling(transition, mediator_mass_ev)
@@ -89,7 +94,55 @@ class HiggsMixing:
             * transition.yukawa_difference_ev(mediator_mass_ev)
         )
 
-    @staticmethod
-    def _validate_kaonic(transition: Transition) -> None:
-        if int(transition.atom.orbiting_particle.pdgid) != -321:
-            raise ValueError("HiggsMixing is defined for kaonic atoms")
+
+@dataclass(frozen=True)
+class UDSScalar:
+    """Scalar model with equal up, down, and strange couplings."""
+
+    proton_coupling_gev: float = 90.3e-3
+    neutron_coupling_gev: float = 92.3e-3
+    kaon_strange_coupling_gev: float = -246.0
+    kaon_down_coupling_gev: float = 0.0
+
+    name: ClassVar[str] = "UDS scalar"
+    parameter_label: ClassVar[str] = r"$1/f_\phi$"
+    parameter_unit: ClassVar[str] = r"$\mathrm{GeV}^{-1}$"
+    parameter_power: ClassVar[int] = 2
+
+    def nuclear_coupling_gev(self, transition: Transition) -> float:
+        """Return ``Z g_p + (A - Z) g_n`` in GeV."""
+        atom = transition.atom
+        return (
+            atom.Z * self.proton_coupling_gev
+            + (atom.A - atom.Z) * self.neutron_coupling_gev
+        )
+
+    def kaon_coupling_gev(self, transition: Transition, mediator_mass_ev):
+        """Return the effective kaon coupling in GeV."""
+        _validate_kaonic(transition)
+        mediator_mass = np.asarray(mediator_mass_ev, dtype=float)
+        kaon_mass_ev = transition.atom.orbiting_mass_ev
+        return (
+            2
+            * (
+                self.kaon_strange_coupling_gev
+                + self.kaon_down_coupling_gev
+            )
+            - self.kaon_down_coupling_gev
+            * (mediator_mass / kaon_mass_ev) ** 2
+        )
+
+    def shift_coefficient_ev(
+        self,
+        transition: Transition,
+        mediator_mass_ev,
+    ):
+        """Return ``K`` in ``delta_E = K * (1/f_phi)**2``."""
+        _validate_kaonic(transition)
+        return (
+            self.nuclear_coupling_gev(transition)
+            * self.kaon_coupling_gev(transition, mediator_mass_ev)
+            * transition.atom.orbiting_mass_ev
+            / (16 * np.pi * HIGGS_VEV_EV)
+            * transition.yukawa_difference_ev(mediator_mass_ev)
+        )
