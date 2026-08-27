@@ -5,8 +5,10 @@ from typing import ClassVar
 
 import numpy as np
 
-from .constants import HIGGS_VEV_EV
+from .constants import ALPHA, HIGGS_VEV_EV
+from .nuclear import get_nuclear_structure
 from .transitions import Transition
+from .vector import VectorInteraction
 
 
 def _validate_kaonic(transition: Transition) -> None:
@@ -39,6 +41,169 @@ class YukawaCoupling:
         return (
             -transition.yukawa_difference_ev(mediator_mass_ev)
             / (4 * np.pi)
+        )
+
+
+@dataclass(frozen=True)
+class DarkPhoton:
+    r"""Dark-photon sensitivity model for exotic atoms.
+
+    ``mode`` may be ``"spin_independent"``, ``"hyperfine"``, or
+    ``"average"``.  A hyperfine component requires explicit ``j_initial``
+    and ``j_final``.  The average mode uses the schematic degeneracy average
+    implemented by :class:`~exotic_bsm.vector.VectorInteraction`.
+
+    The canonical kinetic-mixing potential is obtained with
+    ``yukawa_normalization=1``.  A different multiplicative normalization
+    can be requested explicitly when reproducing an external convention.
+    """
+
+    mode: str = "spin_independent"
+    j_initial: float | None = None
+    j_final: float | None = None
+    yukawa_normalization: float = 1.0
+    average_weighting: str = "degeneracy"
+    e1_only: bool = True
+
+    name: ClassVar[str] = "Dark photon"
+    parameter_label: ClassVar[str] = r"$\varepsilon$"
+    parameter_unit: ClassVar[str] = ""
+    parameter_power: ClassVar[int] = 2
+
+    def __post_init__(self) -> None:
+        allowed_modes = {"spin_independent", "hyperfine", "average"}
+        if self.mode not in allowed_modes:
+            raise ValueError(
+                f"mode must be one of {sorted(allowed_modes)}"
+            )
+        if not np.isfinite(self.yukawa_normalization):
+            raise ValueError("yukawa_normalization must be finite")
+        if self.yukawa_normalization <= 0:
+            raise ValueError("yukawa_normalization must be positive")
+
+        has_initial = self.j_initial is not None
+        has_final = self.j_final is not None
+        if self.mode == "hyperfine" and not (has_initial and has_final):
+            raise ValueError(
+                "hyperfine mode requires j_initial and j_final"
+            )
+        if self.mode != "hyperfine" and (has_initial or has_final):
+            raise ValueError(
+                "j_initial and j_final are only valid in hyperfine mode"
+            )
+        if self.average_weighting not in {"equal", "degeneracy"}:
+            raise ValueError(
+                "average_weighting must be 'equal' or 'degeneracy'"
+            )
+
+    @staticmethod
+    def electric_coupling_product_per_epsilon_squared(
+        transition: Transition,
+    ) -> float:
+        """Return ``g_K g_A / epsilon**2 = -4 pi alpha Z``."""
+        _validate_kaonic(transition)
+        return -4 * np.pi * ALPHA * transition.atom.Z
+
+    @staticmethod
+    def spin_coupling_product_per_epsilon_squared(
+        transition: Transition,
+    ) -> float:
+        """Return the effective proton-spin coupling per ``epsilon**2``.
+
+        The nuclear factor is the fraction ``<S_p>/J`` from the curated
+        local nuclear table.  This is a leading effective prescription; the
+        magnetic-current normalization must be validated before precision
+        use of the SD contribution.
+        """
+        _validate_kaonic(transition)
+        structure = get_nuclear_structure(
+            transition.atom.Z,
+            transition.atom.A,
+        )
+        if structure.spin == 0:
+            return 0.0
+        proton_spin_fraction = (
+            structure.proton_spin_expectation / structure.spin
+        )
+        return 4 * np.pi * ALPHA * proton_spin_fraction
+
+    @staticmethod
+    def nuclear_spin(transition: Transition) -> float:
+        """Return the ground-state nuclear spin from the local table."""
+        return get_nuclear_structure(
+            transition.atom.Z,
+            transition.atom.A,
+        ).spin
+
+    def hyperfine_components(
+        self,
+        transition: Transition,
+    ) -> list[tuple[float, float]]:
+        """Return candidate hyperfine components for the transition."""
+        return VectorInteraction().hyperfine_components(
+            transition,
+            self.nuclear_spin(transition),
+            e1_only=self.e1_only,
+        )
+
+    def shift_coefficient_ev(
+        self,
+        transition: Transition,
+        mediator_mass_ev,
+    ):
+        """Return ``K`` in ``delta_E = K * epsilon**2``."""
+        _validate_kaonic(transition)
+        kernel = VectorInteraction()
+        electric_coupling = (
+            self.yukawa_normalization
+            * self.electric_coupling_product_per_epsilon_squared(
+                transition
+            )
+        )
+
+        if self.mode == "spin_independent":
+            initial_coefficient = (
+                kernel.spin_independent_level_coefficient_ev(
+                    transition,
+                    transition.n_initial,
+                    mediator_mass_ev,
+                )
+            )
+            final_coefficient = (
+                kernel.spin_independent_level_coefficient_ev(
+                    transition,
+                    transition.n_final,
+                    mediator_mass_ev,
+                )
+            )
+            return electric_coupling * (
+                initial_coefficient - final_coefficient
+            )
+
+        nuclear_spin = self.nuclear_spin(transition)
+        if self.mode == "hyperfine":
+            coefficient = kernel.transition_coefficients_ev(
+                transition,
+                mediator_mass_ev,
+                nuclear_spin=nuclear_spin,
+                j_initial=self.j_initial,
+                j_final=self.j_final,
+            )
+        else:
+            coefficient = kernel.hyperfine_average_coefficients_ev(
+                transition,
+                mediator_mass_ev,
+                nuclear_spin=nuclear_spin,
+                weighting=self.average_weighting,
+                e1_only=self.e1_only,
+            )
+
+        spin_coupling = self.spin_coupling_product_per_epsilon_squared(
+            transition
+        )
+        return (
+            electric_coupling * coefficient.spin_independent_ev
+            + spin_coupling * coefficient.spin_dependent_ev
         )
 
 

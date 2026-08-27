@@ -6,6 +6,7 @@ from .measurements import Measurement
 from .models import (
     ALPGlounCPViolating,
     ALPUniversalQuarkCoupling,
+    DarkPhoton,
     HiggsMixing,
     UDSScalar,
     YukawaCoupling,
@@ -25,6 +26,7 @@ __all__ = [
     "ExoticAtomYukawa",
     "ALPGlounCPViolating",
     "ALPUniversalQuarkCoupling",
+    "DarkPhoton",
     "HiggsMixing",
     "Measurement",
     "NUCLEAR_STRUCTURE_TABLE",

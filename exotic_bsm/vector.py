@@ -152,12 +152,56 @@ class VectorInteraction:
         transition: Transition,
         mediator_mass_ev,
         nuclear_spin: float,
+        weighting: str = "degeneracy",
+        e1_only: bool = True,
     ) -> VectorTransitionCoefficient:
-        """Average unresolved hyperfine components by degeneracy.
+        """Average unresolved hyperfine components.
 
-        Every pair ``(J_i, J_f)`` is assigned weight
-        ``(2 J_i + 1)(2 J_f + 1)``.  This is a schematic average, not a
-        calculation of electromagnetic transition strengths.
+        ``weighting="equal"`` assigns the same weight to every component;
+        ``weighting="degeneracy"`` uses
+        ``(2 J_i + 1)(2 J_f + 1)``.  Neither choice is a calculation of
+        electromagnetic transition strengths.
+        """
+        if weighting not in {"equal", "degeneracy"}:
+            raise ValueError("weighting must be 'equal' or 'degeneracy'")
+        components = self.hyperfine_components(
+            transition,
+            nuclear_spin,
+            e1_only=e1_only,
+        )
+
+        sd_coefficients = []
+        weights = []
+        si_coefficient = None
+        for j_initial, j_final in components:
+            coefficients = self.transition_coefficients_ev(
+                transition,
+                mediator_mass_ev,
+                nuclear_spin,
+                j_initial,
+                j_final,
+            )
+            si_coefficient = coefficients.spin_independent_ev
+            sd_coefficients.append(coefficients.spin_dependent_ev)
+            if weighting == "equal":
+                weights.append(1.0)
+            else:
+                weights.append((2 * j_initial + 1) * (2 * j_final + 1))
+
+        averaged_sd = np.average(sd_coefficients, axis=0, weights=weights)
+        return VectorTransitionCoefficient(si_coefficient, averaged_sd)
+
+    def hyperfine_components(
+        self,
+        transition: Transition,
+        nuclear_spin: float,
+        e1_only: bool = True,
+    ) -> list[tuple[float, float]]:
+        """Return candidate ``(J_i, J_f)`` hyperfine components.
+
+        With ``e1_only=True``, impose ``Delta J = 0, +/-1`` and exclude
+        ``0 -> 0``.  Radial line strengths and cascade populations are not
+        included.
         """
         initial_js = self.allowed_total_angular_momenta(
             transition.l_initial,
@@ -167,25 +211,16 @@ class VectorInteraction:
             transition.l_final,
             nuclear_spin,
         )
-
-        sd_coefficients = []
-        weights = []
-        si_coefficient = None
+        components = []
         for j_initial in initial_js:
             for j_final in final_js:
-                coefficients = self.transition_coefficients_ev(
-                    transition,
-                    mediator_mass_ev,
-                    nuclear_spin,
-                    j_initial,
-                    j_final,
-                )
-                si_coefficient = coefficients.spin_independent_ev
-                sd_coefficients.append(coefficients.spin_dependent_ev)
-                weights.append((2 * j_initial + 1) * (2 * j_final + 1))
-
-        averaged_sd = np.average(sd_coefficients, axis=0, weights=weights)
-        return VectorTransitionCoefficient(si_coefficient, averaged_sd)
+                if e1_only and (
+                    abs(j_initial - j_final) > 1
+                    or (j_initial == 0 and j_final == 0)
+                ):
+                    continue
+                components.append((float(j_initial), float(j_final)))
+        return components
 
     @staticmethod
     def _validate_angular_momenta(
