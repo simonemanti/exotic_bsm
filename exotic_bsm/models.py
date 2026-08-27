@@ -146,3 +146,192 @@ class UDSScalar:
             / (16 * np.pi * HIGGS_VEV_EV)
             * transition.yukawa_difference_ev(mediator_mass_ev)
         )
+
+
+@dataclass(frozen=True)
+class ALPGlounCPViolating:
+    """CP-violating scalar-gluon ALP model for kaonic atoms.
+
+    The unknown parameter is ``C_g / Lambda`` in TeV^-1.  The effective
+    hadronic coefficients follow the conventions used in ``Codice.ipynb``
+    and in Eqs. (5.37)-(5.38) of the accompanying thesis, with all other
+    ALP operators set to zero.
+    """
+
+    proton_mass_gev: float = 0.938272
+    neutron_mass_gev: float = 0.939565
+    sigma_up_gev: float = 0.017
+    sigma_down_proton_gev: float = 0.032
+    sigma_strange_proton_gev: float = 0.0413
+    sigma_up_neutron_gev: float = 0.015
+    sigma_down_neutron_gev: float = 0.036
+    sigma_strange_neutron_gev: float = 0.0413
+
+    name: ClassVar[str] = "ALP scalar-gluon CP violating"
+    parameter_label: ClassVar[str] = r"$C_g/\Lambda$"
+    parameter_unit: ClassVar[str] = r"$\mathrm{TeV}^{-1}$"
+    parameter_power: ClassVar[int] = 2
+
+    @staticmethod
+    def active_flavors(mediator_mass_ev):
+        """Return the notebook's stepwise number of active quark flavors."""
+        mass = np.asarray(mediator_mass_ev, dtype=float)
+        flavors = np.zeros_like(mass)
+        flavors[mass >= 2.2e6] = 1
+        flavors[mass >= 4.7e6] = 2
+        flavors[mass >= 95e6] = 3
+        flavors[mass >= 1.28e9] = 4
+        flavors[mass >= 4.18e9] = 5
+        flavors[mass >= 173e9] = 6
+        return flavors
+
+    def kappa_per_cg(self, mediator_mass_ev):
+        """Return ``kappa / C_g = 32 pi^2 / beta_QCD``."""
+        beta_qcd = 11.0 - (2.0 / 3.0) * self.active_flavors(
+            mediator_mass_ev
+        )
+        return 32.0 * np.pi**2 / beta_qcd
+
+    def proton_coupling_gev(self) -> float:
+        """Return the scalar proton coefficient per unit ``C_g`` in GeV."""
+        sigma_sum = (
+            self.sigma_up_gev
+            + self.sigma_down_proton_gev
+            + self.sigma_strange_proton_gev
+        )
+        return (
+            -32.0
+            * np.pi**2
+            / 9.0
+            * (self.proton_mass_gev - sigma_sum)
+        )
+
+    def neutron_coupling_gev(self) -> float:
+        """Return the scalar neutron coefficient per unit ``C_g`` in GeV."""
+        sigma_sum = (
+            self.sigma_up_neutron_gev
+            + self.sigma_down_neutron_gev
+            + self.sigma_strange_neutron_gev
+        )
+        return (
+            -32.0
+            * np.pi**2
+            / 9.0
+            * (self.neutron_mass_gev - sigma_sum)
+        )
+
+    def nuclear_coupling_tev(self, transition: Transition) -> float:
+        """Return ``Z g_p + (A-Z) g_n`` per unit ``C_g`` in TeV."""
+        atom = transition.atom
+        coupling_gev = (
+            atom.Z * self.proton_coupling_gev()
+            + (atom.A - atom.Z) * self.neutron_coupling_gev()
+        )
+        return coupling_gev / 1e3
+
+    def kaon_coupling(self, transition: Transition, mediator_mass_ev):
+        """Return the effective kaon coefficient per unit ``C_g``."""
+        _validate_kaonic(transition)
+        mediator_mass = np.asarray(mediator_mass_ev, dtype=float)
+        kappa = self.kappa_per_cg(mediator_mass)
+        g_kaon_scalar = -3.0 * kappa
+        g_kaon_derivative = 2.0 * kappa
+        return (
+            2.0 * (g_kaon_scalar + g_kaon_derivative)
+            - g_kaon_derivative
+            * (mediator_mass / transition.atom.orbiting_mass_ev) ** 2
+        )
+
+    def shift_coefficient_ev(
+        self,
+        transition: Transition,
+        mediator_mass_ev,
+    ):
+        """Return ``K`` in ``delta_E = K * (C_g/Lambda [TeV^-1])**2``."""
+        _validate_kaonic(transition)
+        kaon_mass_tev = transition.atom.orbiting_mass_ev / 1e12
+        return (
+            self.nuclear_coupling_tev(transition)
+            * self.kaon_coupling(transition, mediator_mass_ev)
+            * kaon_mass_tev
+            / (16.0 * np.pi)
+            * transition.yukawa_difference_ev(mediator_mass_ev)
+        )
+
+
+@dataclass(frozen=True)
+class ALPUniversalQuarkCoupling:
+    """CP-violating ALP with universal scalar light-quark coupling.
+
+    The model assumes ``y_u = y_d = y_s = y`` and returns sensitivities
+    to ``y / Lambda`` expressed in GeV^-1.
+    """
+
+    higgs_vev_gev: float = 246.0
+    up_quark_mass_gev: float = 2.2e-3
+    down_quark_mass_gev: float = 4.7e-3
+    strange_quark_mass_gev: float = 95e-3
+    sigma_up_proton_gev: float = 17e-3
+    sigma_down_proton_gev: float = 32e-3
+    sigma_strange_proton_gev: float = 41.3e-3
+    sigma_up_neutron_gev: float = 15e-3
+    sigma_down_neutron_gev: float = 36e-3
+    sigma_strange_neutron_gev: float = 41.3e-3
+
+    name: ClassVar[str] = "ALP universal quark coupling"
+    parameter_label: ClassVar[str] = r"$y/\Lambda$"
+    parameter_unit: ClassVar[str] = r"$\mathrm{GeV}^{-1}$"
+    parameter_power: ClassVar[int] = 2
+
+    def proton_coupling_gev(self) -> float:
+        """Return the scalar proton coefficient per unit ``y`` in GeV."""
+        return self.higgs_vev_gev * (
+            self.sigma_up_proton_gev / self.up_quark_mass_gev
+            + self.sigma_down_proton_gev / self.down_quark_mass_gev
+            + self.sigma_strange_proton_gev
+            / self.strange_quark_mass_gev
+        )
+
+    def neutron_coupling_gev(self) -> float:
+        """Return the scalar neutron coefficient per unit ``y`` in GeV."""
+        return self.higgs_vev_gev * (
+            self.sigma_up_neutron_gev / self.up_quark_mass_gev
+            + self.sigma_down_neutron_gev / self.down_quark_mass_gev
+            + self.sigma_strange_neutron_gev
+            / self.strange_quark_mass_gev
+        )
+
+    def nuclear_coupling_gev(self, transition: Transition) -> float:
+        """Return ``Z g_p + (A-Z) g_n`` per unit ``y`` in GeV."""
+        atom = transition.atom
+        return (
+            atom.Z * self.proton_coupling_gev()
+            + (atom.A - atom.Z) * self.neutron_coupling_gev()
+        )
+
+    def kaon_coupling(self, transition: Transition, mediator_mass_ev):
+        """Return the effective kaon coefficient per unit ``y``."""
+        _validate_kaonic(transition)
+        mediator_mass = np.asarray(mediator_mass_ev, dtype=float)
+        g_kaon_scalar = (
+            2.0
+            * self.higgs_vev_gev
+            / (self.up_quark_mass_gev + self.strange_quark_mass_gev)
+        )
+        return np.full_like(mediator_mass, 2.0 * g_kaon_scalar)
+
+    def shift_coefficient_ev(
+        self,
+        transition: Transition,
+        mediator_mass_ev,
+    ):
+        """Return ``K`` in ``delta_E = K * (y/Lambda [GeV^-1])**2``."""
+        _validate_kaonic(transition)
+        kaon_mass_gev = transition.atom.orbiting_mass_ev / 1e9
+        return (
+            self.nuclear_coupling_gev(transition)
+            * self.kaon_coupling(transition, mediator_mass_ev)
+            * kaon_mass_gev
+            / (16.0 * np.pi)
+            * transition.yukawa_difference_ev(mediator_mass_ev)
+        )
