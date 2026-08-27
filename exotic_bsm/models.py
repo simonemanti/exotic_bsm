@@ -208,6 +208,156 @@ class DarkPhoton:
 
 
 @dataclass(frozen=True)
+class ProtophobicVector:
+    r"""Protophobic vector model with dominant neutron coupling.
+
+    The available modes and averaging conventions are the same as for
+    :class:`DarkPhoton`.  ``yukawa_normalization=1`` follows the canonical
+    ``1/(4 pi)`` potential convention; external conventions can request a
+    different factor explicitly.
+    """
+
+    mode: str = "spin_independent"
+    j_initial: float | None = None
+    j_final: float | None = None
+    yukawa_normalization: float = 1.0
+    average_weighting: str = "degeneracy"
+    e1_only: bool = True
+
+    name: ClassVar[str] = "Protophobic vector"
+    parameter_label: ClassVar[str] = r"$\varepsilon_B$"
+    parameter_unit: ClassVar[str] = ""
+    parameter_power: ClassVar[int] = 2
+
+    def __post_init__(self) -> None:
+        allowed_modes = {"spin_independent", "hyperfine", "average"}
+        if self.mode not in allowed_modes:
+            raise ValueError(
+                f"mode must be one of {sorted(allowed_modes)}"
+            )
+        if (
+            not np.isfinite(self.yukawa_normalization)
+            or self.yukawa_normalization <= 0
+        ):
+            raise ValueError("yukawa_normalization must be positive and finite")
+        has_initial = self.j_initial is not None
+        has_final = self.j_final is not None
+        if self.mode == "hyperfine" and not (has_initial and has_final):
+            raise ValueError(
+                "hyperfine mode requires j_initial and j_final"
+            )
+        if self.mode != "hyperfine" and (has_initial or has_final):
+            raise ValueError(
+                "j_initial and j_final are only valid in hyperfine mode"
+            )
+        if self.average_weighting not in {"equal", "degeneracy"}:
+            raise ValueError(
+                "average_weighting must be 'equal' or 'degeneracy'"
+            )
+
+    @staticmethod
+    def vector_coupling_product_per_epsilon_squared(
+        transition: Transition,
+    ) -> float:
+        """Return the coherent coupling ``4 pi alpha (Z-A)``."""
+        _validate_kaonic(transition)
+        return 4 * np.pi * ALPHA * (
+            transition.atom.Z - transition.atom.A
+        )
+
+    @staticmethod
+    def spin_coupling_product_per_epsilon_squared(
+        transition: Transition,
+    ) -> float:
+        """Return the effective neutron-spin coupling per ``epsilon_B**2``."""
+        _validate_kaonic(transition)
+        structure = get_nuclear_structure(
+            transition.atom.Z,
+            transition.atom.A,
+        )
+        if structure.spin == 0:
+            return 0.0
+        neutron_spin_fraction = (
+            structure.neutron_spin_expectation / structure.spin
+        )
+        return -4 * np.pi * ALPHA * neutron_spin_fraction
+
+    @staticmethod
+    def nuclear_spin(transition: Transition) -> float:
+        """Return the ground-state nuclear spin from the local table."""
+        return get_nuclear_structure(
+            transition.atom.Z,
+            transition.atom.A,
+        ).spin
+
+    def hyperfine_components(
+        self,
+        transition: Transition,
+    ) -> list[tuple[float, float]]:
+        """Return candidate hyperfine components for the transition."""
+        return VectorInteraction().hyperfine_components(
+            transition,
+            self.nuclear_spin(transition),
+            e1_only=self.e1_only,
+        )
+
+    def shift_coefficient_ev(
+        self,
+        transition: Transition,
+        mediator_mass_ev,
+    ):
+        """Return ``K`` in ``delta_E = K * epsilon_B**2``."""
+        _validate_kaonic(transition)
+        kernel = VectorInteraction()
+        coherent_coupling = (
+            self.yukawa_normalization
+            * self.vector_coupling_product_per_epsilon_squared(
+                transition
+            )
+        )
+
+        initial_si = kernel.spin_independent_level_coefficient_ev(
+            transition,
+            transition.n_initial,
+            mediator_mass_ev,
+        )
+        final_si = kernel.spin_independent_level_coefficient_ev(
+            transition,
+            transition.n_final,
+            mediator_mass_ev,
+        )
+        transition_si = initial_si - final_si
+        if self.mode == "spin_independent":
+            return coherent_coupling * transition_si
+
+        nuclear_spin = self.nuclear_spin(transition)
+        if self.mode == "hyperfine":
+            coefficient = kernel.transition_coefficients_ev(
+                transition,
+                mediator_mass_ev,
+                nuclear_spin=nuclear_spin,
+                j_initial=self.j_initial,
+                j_final=self.j_final,
+            )
+        else:
+            coefficient = kernel.hyperfine_average_coefficients_ev(
+                transition,
+                mediator_mass_ev,
+                nuclear_spin=nuclear_spin,
+                weighting=self.average_weighting,
+                e1_only=self.e1_only,
+            )
+
+        spin_coupling = self.spin_coupling_product_per_epsilon_squared(
+            transition
+        )
+        return (
+            coherent_coupling * coefficient.spin_independent_ev
+            + spin_coupling * coefficient.spin_dependent_ev
+        )
+
+
+@dataclass(frozen=True)
 class HiggsMixing:
     """Higgs-mixing sensitivity model for kaonic atoms."""
 

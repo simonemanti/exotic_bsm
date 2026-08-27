@@ -1,13 +1,13 @@
 """Tools for BSM sensitivities in exotic atoms."""
 
 from .atoms import ExoticAtom
-from .exotic_atom_yukawa import ExoticAtomYukawa
 from .measurements import Measurement
 from .models import (
     ALPGlounCPViolating,
     ALPUniversalQuarkCoupling,
     DarkPhoton,
     HiggsMixing,
+    ProtophobicVector,
     UDSScalar,
     YukawaCoupling,
 )
@@ -23,7 +23,6 @@ from .vector import VectorInteraction, VectorTransitionCoefficient
 
 __all__ = [
     "ExoticAtom",
-    "ExoticAtomYukawa",
     "ALPGlounCPViolating",
     "ALPUniversalQuarkCoupling",
     "DarkPhoton",
@@ -31,6 +30,7 @@ __all__ = [
     "Measurement",
     "NUCLEAR_STRUCTURE_TABLE",
     "NuclearStructure",
+    "ProtophobicVector",
     "SensitivityCurve",
     "Transition",
     "UDSScalar",
