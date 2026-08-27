@@ -18,6 +18,7 @@ from .nuclear import (
 from .plotting import plot_sensitivity
 from .sensitivities import SensitivityCurve, expected_sensitivity
 from .transitions import Transition
+from .vector import VectorInteraction, VectorTransitionCoefficient
 
 __all__ = [
     "ExoticAtom",
@@ -32,6 +33,8 @@ __all__ = [
     "Transition",
     "UDSScalar",
     "YukawaCoupling",
+    "VectorInteraction",
+    "VectorTransitionCoefficient",
     "expected_sensitivity",
     "get_nuclear_structure",
     "plot_sensitivity",
