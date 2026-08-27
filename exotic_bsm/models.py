@@ -153,9 +153,9 @@ class ALPGlounCPViolating:
     """CP-violating scalar-gluon ALP model for kaonic atoms.
 
     The unknown parameter is ``C_g / Lambda`` in TeV^-1.  The effective
-    hadronic coefficients follow the conventions used in ``Codice.ipynb``
-    and in Eqs. (5.37)-(5.38) of the accompanying thesis, with all other
-    ALP operators set to zero.
+    The effective hadronic coefficients implement the scalar gluon trace-
+    anomaly matching convention used in Eqs. (5.37)-(5.38) of the
+    accompanying thesis, with all other ALP operators set to zero.
     """
 
     proton_mass_gev: float = 0.938272
@@ -174,7 +174,7 @@ class ALPGlounCPViolating:
 
     @staticmethod
     def active_flavors(mediator_mass_ev):
-        """Return the notebook's stepwise number of active quark flavors."""
+        """Return a stepwise number of active quark flavors."""
         mass = np.asarray(mediator_mass_ev, dtype=float)
         flavors = np.zeros_like(mass)
         flavors[mass >= 2.2e6] = 1

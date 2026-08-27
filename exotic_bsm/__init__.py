@@ -10,6 +10,11 @@ from .models import (
     UDSScalar,
     YukawaCoupling,
 )
+from .nuclear import (
+    NUCLEAR_STRUCTURE_TABLE,
+    NuclearStructure,
+    get_nuclear_structure,
+)
 from .plotting import plot_sensitivity
 from .sensitivities import SensitivityCurve, expected_sensitivity
 from .transitions import Transition
@@ -21,10 +26,13 @@ __all__ = [
     "ALPUniversalQuarkCoupling",
     "HiggsMixing",
     "Measurement",
+    "NUCLEAR_STRUCTURE_TABLE",
+    "NuclearStructure",
     "SensitivityCurve",
     "Transition",
     "UDSScalar",
     "YukawaCoupling",
     "expected_sensitivity",
+    "get_nuclear_structure",
     "plot_sensitivity",
 ]
